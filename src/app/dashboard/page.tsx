@@ -178,7 +178,7 @@ export default function DashboardPage() {
                                     borderRadius: '8px',
                                     color: '#fff',
                                 }}
-                                labelFormatter={formatDate}
+                                labelFormatter={(label) => formatDate(String(label))}
                             />
                             <Area
                                 type="monotone"
