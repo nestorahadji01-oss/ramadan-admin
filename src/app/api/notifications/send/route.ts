@@ -16,10 +16,21 @@ interface NotificationPayload {
  */
 export async function POST(request: NextRequest) {
     try {
+        // Debug: log credential status (not the actual keys)
+        console.log('OneSignal Config:', {
+            hasAppId: !!ONESIGNAL_APP_ID,
+            hasApiKey: !!ONESIGNAL_REST_API_KEY,
+            appIdLength: ONESIGNAL_APP_ID?.length || 0,
+        });
+
         // Verify credentials are configured
         if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
+            console.error('Missing OneSignal credentials. Check Vercel environment variables.');
             return NextResponse.json(
-                { success: false, error: 'OneSignal credentials not configured' },
+                {
+                    success: false,
+                    error: 'OneSignal non configuré! Ajoutez ONESIGNAL_APP_ID et ONESIGNAL_REST_API_KEY dans Vercel → Settings → Environment Variables'
+                },
                 { status: 500 }
             );
         }
