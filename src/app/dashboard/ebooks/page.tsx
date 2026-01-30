@@ -4,9 +4,6 @@ import { useEffect, useState, useRef } from 'react';
 import { Plus, RefreshCw, Trash2, X, BookOpen, Upload, FileText, Image } from 'lucide-react';
 import {
     getEBooks,
-    addEBook,
-    deleteEBook,
-    uploadFile,
     EBOOK_CATEGORIES,
     type EBook,
 } from '@/lib/supabase';
@@ -54,44 +51,27 @@ export default function EbooksPage() {
         }
 
         setActionLoading('add');
-        setUploadProgress('Upload du PDF...');
+        setUploadProgress('Upload en cours...');
 
         try {
-            // Upload PDF
-            const pdfPath = `pdfs/${Date.now()}_${pdfFile.name}`;
-            const pdfResult = await uploadFile(pdfFile, 'ebooks', pdfPath);
-
-            if (pdfResult.error || !pdfResult.url) {
-                alert('Erreur upload PDF: ' + pdfResult.error);
-                setActionLoading(null);
-                setUploadProgress('');
-                return;
-            }
-
-            let coverUrl = null;
-
-            // Upload cover if provided
+            // Use FormData to send to API route
+            const formData = new FormData();
+            formData.append('title', newBook.title);
+            formData.append('author', newBook.author);
+            formData.append('category', newBook.category);
+            formData.append('description', newBook.description);
+            formData.append('pages', newBook.pages);
+            formData.append('pdf', pdfFile);
             if (coverFile) {
-                setUploadProgress('Upload de la couverture...');
-                const coverPath = `covers/${Date.now()}_${coverFile.name}`;
-                const coverResult = await uploadFile(coverFile, 'ebooks', coverPath);
-                if (coverResult.url) {
-                    coverUrl = coverResult.url;
-                }
+                formData.append('cover', coverFile);
             }
 
-            setUploadProgress('Enregistrement...');
-
-            // Add to database
-            const result = await addEBook({
-                title: newBook.title,
-                author: newBook.author || undefined,
-                category: newBook.category,
-                description: newBook.description || undefined,
-                file_url: pdfResult.url,
-                cover_url: coverUrl || undefined,
-                pages: newBook.pages ? parseInt(newBook.pages) : undefined,
+            const response = await fetch('/api/ebooks', {
+                method: 'POST',
+                body: formData,
             });
+
+            const result = await response.json();
 
             if (result.success) {
                 setShowAddModal(false);
@@ -115,12 +95,21 @@ export default function EbooksPage() {
         if (!confirm(`Supprimer "${title}"?`)) return;
 
         setActionLoading(id);
-        const result = await deleteEBook(id);
 
-        if (result.success) {
-            loadEbooks();
-        } else {
-            alert('Erreur: ' + result.error);
+        try {
+            const response = await fetch(`/api/ebooks?id=${id}`, {
+                method: 'DELETE',
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                loadEbooks();
+            } else {
+                alert('Erreur: ' + result.error);
+            }
+        } catch (error) {
+            console.error('Error deleting book:', error);
+            alert('Une erreur est survenue');
         }
 
         setActionLoading(null);
