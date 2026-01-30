@@ -2,8 +2,18 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
+// Client for read operations (uses anon key)
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// Admin client for write operations (bypasses RLS)
+export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
+    auth: {
+        autoRefreshToken: false,
+        persistSession: false
+    }
+});
 
 // Types
 export interface ActivationCode {
@@ -95,7 +105,7 @@ export async function addActivationCode(data: {
     let phone = data.phone.replace(/[^\d+]/g, '');
     if (!phone.startsWith('+')) phone = '+' + phone;
 
-    const { error } = await supabase.from('activation_codes').insert({
+    const { error } = await supabaseAdmin.from('activation_codes').insert({
         phone,
         order_id: `ADMIN-${Date.now()}`,
         customer_name: data.customer_name || 'Manual Entry',
@@ -113,7 +123,7 @@ export async function addActivationCode(data: {
 
 // Delete code
 export async function deleteActivationCode(id: string): Promise<{ success: boolean; error?: string }> {
-    const { error } = await supabase.from('activation_codes').delete().eq('id', id);
+    const { error } = await supabaseAdmin.from('activation_codes').delete().eq('id', id);
 
     if (error) {
         return { success: false, error: error.message };
@@ -124,7 +134,7 @@ export async function deleteActivationCode(id: string): Promise<{ success: boole
 
 // Reset device (allow re-activation)
 export async function resetDeviceActivation(id: string): Promise<{ success: boolean; error?: string }> {
-    const { error } = await supabase
+    const { error } = await supabaseAdmin
         .from('activation_codes')
         .update({ device_id: null, used: false, used_at: null })
         .eq('id', id);
@@ -225,7 +235,7 @@ export async function uploadFile(
     bucket: string,
     path: string
 ): Promise<{ url: string | null; error: string | null }> {
-    const { data, error } = await supabase.storage
+    const { data, error } = await supabaseAdmin.storage
         .from(bucket)
         .upload(path, file, {
             cacheControl: '3600',
@@ -237,7 +247,7 @@ export async function uploadFile(
         return { url: null, error: error.message };
     }
 
-    const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(data.path);
+    const { data: urlData } = supabaseAdmin.storage.from(bucket).getPublicUrl(data.path);
     return { url: urlData.publicUrl, error: null };
 }
 
@@ -251,7 +261,7 @@ export async function addEBook(data: {
     cover_url?: string;
     pages?: number;
 }): Promise<{ success: boolean; error?: string }> {
-    const { error } = await supabase.from('ebooks').insert({
+    const { error } = await supabaseAdmin.from('ebooks').insert({
         title: data.title,
         author: data.author || null,
         category: data.category,
@@ -273,7 +283,7 @@ export async function updateEBook(
     id: string,
     data: Partial<Omit<EBook, 'id' | 'created_at'>>
 ): Promise<{ success: boolean; error?: string }> {
-    const { error } = await supabase.from('ebooks').update(data).eq('id', id);
+    const { error } = await supabaseAdmin.from('ebooks').update(data).eq('id', id);
 
     if (error) {
         return { success: false, error: error.message };
@@ -284,7 +294,7 @@ export async function updateEBook(
 
 // Delete e-book
 export async function deleteEBook(id: string): Promise<{ success: boolean; error?: string }> {
-    const { error } = await supabase.from('ebooks').delete().eq('id', id);
+    const { error } = await supabaseAdmin.from('ebooks').delete().eq('id', id);
 
     if (error) {
         return { success: false, error: error.message };
