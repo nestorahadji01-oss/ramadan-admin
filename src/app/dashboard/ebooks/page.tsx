@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Plus, RefreshCw, Trash2, X, BookOpen, Upload, FileText, Image } from 'lucide-react';
 import {
     getEBooks,
+    uploadFile,
     EBOOK_CATEGORIES,
     type EBook,
 } from '@/lib/supabase';
@@ -51,24 +52,47 @@ export default function EbooksPage() {
         }
 
         setActionLoading('add');
-        setUploadProgress('Upload en cours...');
 
         try {
-            // Use FormData to send to API route
-            const formData = new FormData();
-            formData.append('title', newBook.title);
-            formData.append('author', newBook.author);
-            formData.append('category', newBook.category);
-            formData.append('description', newBook.description);
-            formData.append('pages', newBook.pages);
-            formData.append('pdf', pdfFile);
-            if (coverFile) {
-                formData.append('cover', coverFile);
+            // Step 1: Upload PDF directly to Supabase Storage (client-side)
+            setUploadProgress('Upload du PDF...');
+            const pdfPath = `pdfs/${Date.now()}_${pdfFile.name}`;
+            const pdfResult = await uploadFile(pdfFile, 'ebooks', pdfPath);
+
+            if (pdfResult.error || !pdfResult.url) {
+                alert('Erreur upload PDF: ' + pdfResult.error);
+                setActionLoading(null);
+                setUploadProgress('');
+                return;
             }
 
+            // Step 2: Upload cover if provided
+            let coverUrl: string | null = null;
+            if (coverFile) {
+                setUploadProgress('Upload de la couverture...');
+                const coverPath = `covers/${Date.now()}_${coverFile.name}`;
+                const coverResult = await uploadFile(coverFile, 'ebooks', coverPath);
+                if (coverResult.url) {
+                    coverUrl = coverResult.url;
+                }
+            }
+
+            // Step 3: Call API to insert into database (small JSON, no file)
+            setUploadProgress('Enregistrement...');
             const response = await fetch('/api/ebooks', {
                 method: 'POST',
-                body: formData,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    title: newBook.title,
+                    author: newBook.author || null,
+                    category: newBook.category,
+                    description: newBook.description || null,
+                    pages: newBook.pages || null,
+                    file_url: pdfResult.url,
+                    cover_url: coverUrl,
+                }),
             });
 
             const result = await response.json();
@@ -84,7 +108,8 @@ export default function EbooksPage() {
             }
         } catch (error) {
             console.error('Error adding book:', error);
-            alert('Une erreur est survenue');
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            alert('Erreur: ' + errorMsg);
         }
 
         setActionLoading(null);

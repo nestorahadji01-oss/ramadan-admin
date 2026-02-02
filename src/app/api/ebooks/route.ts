@@ -16,91 +16,34 @@ if (supabaseUrl && supabaseServiceRoleKey) {
     });
 }
 
+// POST: Add ebook to database (files are uploaded directly to Storage from client)
 export async function POST(request: NextRequest) {
     try {
-        // Check if supabaseAdmin is configured
         if (!supabaseAdmin) {
-            console.error('Missing env vars:', {
-                hasUrl: !!supabaseUrl,
-                hasKey: !!supabaseServiceRoleKey
-            });
             return NextResponse.json(
                 { success: false, error: 'Configuration serveur manquante (SUPABASE_SERVICE_ROLE_KEY)' },
                 { status: 500 }
             );
         }
 
-        const formData = await request.formData();
+        const body = await request.json();
+        const { title, author, category, description, pages, file_url, cover_url } = body;
 
-        const title = formData.get('title') as string;
-        const author = formData.get('author') as string | null;
-        const category = formData.get('category') as string;
-        const description = formData.get('description') as string | null;
-        const pages = formData.get('pages') as string | null;
-        const pdfFile = formData.get('pdf') as File | null;
-        const coverFile = formData.get('cover') as File | null;
-
-        if (!title || !category || !pdfFile) {
+        if (!title || !category || !file_url) {
             return NextResponse.json(
-                { success: false, error: 'Titre, catégorie et fichier PDF requis' },
+                { success: false, error: 'Titre, catégorie et file_url requis' },
                 { status: 400 }
             );
         }
 
-        // Upload PDF
-        const pdfPath = `ebooks/${Date.now()}-${pdfFile.name}`;
-        const pdfBuffer = await pdfFile.arrayBuffer();
-
-        const { error: pdfError } = await supabaseAdmin.storage
-            .from('ebooks')
-            .upload(pdfPath, pdfBuffer, {
-                contentType: 'application/pdf',
-                cacheControl: '3600',
-                upsert: true
-            });
-
-        if (pdfError) {
-            console.error('PDF upload error:', pdfError);
-            return NextResponse.json(
-                { success: false, error: `Erreur upload PDF: ${pdfError.message}` },
-                { status: 500 }
-            );
-        }
-
-        const { data: pdfUrlData } = supabaseAdmin.storage
-            .from('ebooks')
-            .getPublicUrl(pdfPath);
-
-        // Upload cover if provided
-        let coverUrl: string | null = null;
-        if (coverFile) {
-            const coverPath = `covers/${Date.now()}-${coverFile.name}`;
-            const coverBuffer = await coverFile.arrayBuffer();
-
-            const { error: coverError } = await supabaseAdmin.storage
-                .from('ebooks')
-                .upload(coverPath, coverBuffer, {
-                    contentType: coverFile.type,
-                    cacheControl: '3600',
-                    upsert: true
-                });
-
-            if (!coverError) {
-                const { data: coverUrlData } = supabaseAdmin.storage
-                    .from('ebooks')
-                    .getPublicUrl(coverPath);
-                coverUrl = coverUrlData.publicUrl;
-            }
-        }
-
-        // Insert into database
+        // Insert into database using service_role to bypass RLS
         const { error: dbError } = await supabaseAdmin.from('ebooks').insert({
             title,
             author: author || null,
             category,
             description: description || null,
-            file_url: pdfUrlData.publicUrl,
-            cover_url: coverUrl,
+            file_url,
+            cover_url: cover_url || null,
             pages: pages ? parseInt(pages) : null
         });
 
@@ -124,9 +67,9 @@ export async function POST(request: NextRequest) {
     }
 }
 
+// DELETE: Remove ebook from database
 export async function DELETE(request: NextRequest) {
     try {
-        // Check if supabaseAdmin is configured
         if (!supabaseAdmin) {
             return NextResponse.json(
                 { success: false, error: 'Configuration serveur manquante (SUPABASE_SERVICE_ROLE_KEY)' },
@@ -164,4 +107,3 @@ export async function DELETE(request: NextRequest) {
         );
     }
 }
-
