@@ -126,6 +126,14 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
     try {
+        // Check if supabaseAdmin is configured
+        if (!supabaseAdmin) {
+            return NextResponse.json(
+                { success: false, error: 'Configuration serveur manquante (SUPABASE_SERVICE_ROLE_KEY)' },
+                { status: 500 }
+            );
+        }
+
         const { searchParams } = new URL(request.url);
         const id = searchParams.get('id');
 
@@ -149,9 +157,11 @@ export async function DELETE(request: NextRequest) {
 
     } catch (error) {
         console.error('Ebook deletion error:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
         return NextResponse.json(
-            { success: false, error: 'Erreur serveur' },
+            { success: false, error: `Erreur serveur: ${errorMessage}` },
             { status: 500 }
         );
     }
 }
+
