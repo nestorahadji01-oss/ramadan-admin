@@ -1,19 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // Create admin client server-side where env vars are available
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
-    auth: {
-        autoRefreshToken: false,
-        persistSession: false
-    }
-});
+let supabaseAdmin: SupabaseClient | null = null;
+
+if (supabaseUrl && supabaseServiceRoleKey) {
+    supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
+        auth: {
+            autoRefreshToken: false,
+            persistSession: false
+        }
+    });
+}
 
 export async function POST(request: NextRequest) {
     try {
+        // Check if supabaseAdmin is configured
+        if (!supabaseAdmin) {
+            console.error('Missing env vars:', {
+                hasUrl: !!supabaseUrl,
+                hasKey: !!supabaseServiceRoleKey
+            });
+            return NextResponse.json(
+                { success: false, error: 'Configuration serveur manquante (SUPABASE_SERVICE_ROLE_KEY)' },
+                { status: 500 }
+            );
+        }
+
         const formData = await request.formData();
 
         const title = formData.get('title') as string;
@@ -100,8 +116,9 @@ export async function POST(request: NextRequest) {
 
     } catch (error) {
         console.error('Ebook creation error:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
         return NextResponse.json(
-            { success: false, error: 'Erreur serveur' },
+            { success: false, error: `Erreur serveur: ${errorMessage}` },
             { status: 500 }
         );
     }
